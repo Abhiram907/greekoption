@@ -77,31 +77,35 @@ def get_data():
 
 # Authenticate with Google Sheets
 import json
+import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 def authenticate_google_sheets():
-    # Path to your service account JSON key file
-    credentials_path = "gen-lang-client-0864245587-f83783301092.json"
-
+    # Load credentials from the GitHub Secret
+    credentials_json = os.getenv("GOOGLE_CREDENTIALS")
+    if not credentials_json:
+        raise ValueError("GOOGLE_CREDENTIALS environment variable is not set.")
+    
+    # Parse the JSON string into a dictionary
+    credentials_dict = json.loads(credentials_json)
+    
     # Define the scope of permissions
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-
+    
     # Authenticate using the service account
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope)
+    credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
     client = gspread.authorize(credentials)
-
-    # Open the Google Sheet by its name
-    spreadsheet = client.open_by_key("1qkW03aN6DYLKHLUIbMjiC0toDD_3caGt37FgW6DbmWc")
-
-
+    
+    # Open the Google Sheet by its ID
+    spreadsheet = client.open_by_key("1qkW03aN6DYLKHLUIbMjiC0toDD_3caGt37FgW6DbmWc")  # Replace with your actual sheet ID
+    
     # Get references to both sheets
     sheet1 = spreadsheet.sheet1  # Sheet for difference_table
     sheet2 = spreadsheet.get_worksheet(1)  # Sheet for current_summary (index 1 refers to the second sheet)
-
     return sheet1, sheet2
 
 # Main loop
