@@ -27,15 +27,12 @@ jobs:
           pip install -r requirements.txt
 
       # Step 4: Configure secrets (e.g., API keys, credentials)
-      - name: Configure secrets
-        run: |
-          echo "GOOGLE_CREDENTIALS=${{ secrets.GOOGLE_CREDENTIALS }}" >> $GITHUB_ENV
-          echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
-          echo "USERNAME=${{ secrets.USERNAME }}" >> $GITHUB_ENV
-          echo "PASSWORD=${{ secrets.PASSWORD }}" >> $GITHUB_ENV
-          echo "TOTP_TOKEN=${{ secrets.TOTP_TOKEN }}" >> $GITHUB_ENV
-
-      # Step 5: Run the script
       - name: Run script
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          API_KEY: ${{ secrets.API_KEY }}
+          USERNAME: ${{ secrets.USERNAME }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          TOTP_TOKEN: ${{ secrets.TOTP_TOKEN }}
         run: |
           python optionchain.py
