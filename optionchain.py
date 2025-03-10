@@ -115,8 +115,8 @@ def authenticate_google_sheets():
     spreadsheet = client.open("optionchain")  # Replace "optionchain" with your actual sheet name
 
     # Get references to both sheets
-    sheet1 = spreadsheet.sheet1  # Sheet for difference_table
-    sheet2 = spreadsheet.get_worksheet(1)  # Sheet for current_summary (index 1 refers to the second sheet)
+    sheet1 = spreadsheet.get_worksheet(2) # Sheet for difference_table
+    sheet2 = spreadsheet.get_worksheet(3)  # Sheet for current_summary (index 1 refers to the second sheet)
     return sheet1, sheet2
 
 # Main loop
