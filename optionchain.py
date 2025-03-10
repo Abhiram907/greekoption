@@ -51,7 +51,7 @@ previous_summary = None
 def get_data():
     params = {
         "name": "NIFTY",
-        "expirydate": "06MAR2025"
+        "expirydate": "13MAR2025"
     }
     try:
         # Fetch option Greeks data
@@ -81,25 +81,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 def authenticate_google_sheets():
-    # Embedded JSON content of the service account key
-    credentials_json = """
-    {
-      "type": "service_account",
-      "project_id": "gen-lang-client-0821497990",
-      "private_key_id": "b7d00535dc2e437ace75f34b10242aa17270082a",
-      "private_key": "-----BEGIN PRIVATE KEY-----\\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCvU4SPSuhLFaWK\\nkdyuFLRiWtDExnQN6Yafm0sx4SyjRHsGrG5m6efVG97iLqRGPG+laDH8Plrvo6RI\\nQ5pEthy+LMXWkdhmWV10A1XYypThtX0nvwX7P+NzPUbaejPia9153nwqsTEDxOnJ\\n9xyX2SAhiK57VDNSVUga9wnkqgZgS+ETKknpWuSnTHGR155QfP2yCf/wchw8eJFg\\nix0pA7kN1tX+3J3HQ/rmOfOzPSp1v3vlinsguvZvrurD4PHMkLI7YUd+3pZnmMSk\\n81naSMPap3JhzffEpIJV08/GB+5FBx9095NEb0I/O57avPoiY3NUz4/jVrd57Zlj\\npUUZq+t5AgMBAAECggEAD0NIxrWpb8HoaZ4FlVUBmA9aXcr99ukVumbJPsQgv+zZ\\n/ex8ZvKlZ0C4ID4ZuHCR8pcVxOUDwxlel5jlAObOrUKWDXYgXdaZQ1x3+Hm4SMbl\\nKJThVyxKZ3GV7baWNjeYLgAPlKLcxrx5csbToyd4e9rbf6qGljwM3SYU4yZnDDJh\\n8OENfriMjgDVZpZBtc+6y2wUBt36Xkm+c3RAJAK8+WZmZVgCSLVziLq0ErEmLh//\\ni/cSsdHilcYNHoYLnrGmNP9M/VgMu1zkcEQM6pMTd20FKgyNCU6NZTyt5+AoPIYg\\n1B3XuVFIIIVyzdp5INh3OBRFKhV9bFDT2h1oQ81U4QKBgQDchAU+G65GJNd8jM81\\ntMJnspdJ6qtBPYUwEapIC1GFGLWPCuV6iNrdqhtGZ2K4VV0YK4qZb8IMndQrAUA3\\n4f/nsWHW2sNii/WfvLURCbEoGpdj/WCPt3Aqd6urBkTY1B3ej9ON2jKwpqM8tEFE\\nSSV3g8wzmggnJdCR2DxreOlZMQKBgQDLifOAxQu+lCnY8fpiZAB3ub8sZQPhbyU+\\nUoPVS4PI3edYwX1lpJ226OVf168ENsoUIIv2KEIXRzJ3Ih33QV4aR4Vp/l+mWaEc\\niBuXTLphrQm8kSdwBcY7aBkVO4NoJwxk4b7JyRfx/7pNbcgut3YXhbKdkaSl/M5D\\nH+MbPgokyQKBgGL81ImjzWBpa13aq611HguErMsej4+yuRXx6Bl9EzQG+oFip86Q\\nnocAtEuvXy5WC3stGIN2GoqlUreXUSeEyOZNxxi2jRywrSruf+1NB3x0K19UP0Nk\\nWfKGU8ZrAv6+gUYGFDZKK5UGyKIYXG/10d7LiB/l1iEUpYLCqaSo2z8RAoGBAJQr\\nl91tFLCnMZOiDDFmNUTzLm2GF/4bqFQnQ5uZvpUSnaDqMnw1Cy8leh18aQc7T365\\ndso64moJxX4ekwv1RSkCWeggascxxmx71QIetCv5CPaCAOC3A2kpzeC8E1xV2Nrz\\nz60bvFfKX3iQa8M+gTR8etvkM6U2VX1eEDk7v6ypAoGBAK1GI16WdDuPDNJA5+J5\\nMEk2xz/ADGNHOXsSHaU2fKZRnQNxrAseerPoYF2ew9xiwD42YXG+h2SlPXlAjdgJ\\n28ovjL9QuVDy/nqy3x7XEU5g+7nxqO9CETXU38HPkpx20xLGYxZgUlkGrjBoFZRp\\nJeACa3Vf/nAgV3WzMo9x5cm5\\n-----END PRIVATE KEY-----\\n",
-      "client_email": "option-chain-service@gen-lang-client-0821497990.iam.gserviceaccount.com",
-      "client_id": "108563374482304923418",
-      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-      "token_uri": "https://oauth2.googleapis.com/token",
-      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/option-chain-service%40gen-lang-client-0821497990.iam.gserviceaccount.com",
-      "universe_domain": "googleapis.com"
-    }
-    """
-
-    # Parse the JSON string into a dictionary
-    credentials_dict = json.loads(credentials_json)
+    # Path to your service account JSON key file
+    credentials_path = "/content/gen-lang-client-0864245587-f83783301092.json"
 
     # Define the scope of permissions
     scope = [
@@ -108,15 +91,17 @@ def authenticate_google_sheets():
     ]
 
     # Authenticate using the service account
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope)
     client = gspread.authorize(credentials)
 
     # Open the Google Sheet by its name
-    spreadsheet = client.open("optionchain")  # Replace "optionchain" with your actual sheet name
+    spreadsheet = client.open_by_key("1qkW03aN6DYLKHLUIbMjiC0toDD_3caGt37FgW6DbmWc")
+
 
     # Get references to both sheets
-    sheet1 = spreadsheet.get_worksheet(2) # Sheet for difference_table
-    sheet2 = spreadsheet.get_worksheet(3)  # Sheet for current_summary (index 1 refers to the second sheet)
+    sheet1 = spreadsheet.sheet1  # Sheet for difference_table
+    sheet2 = spreadsheet.get_worksheet(1)  # Sheet for current_summary (index 1 refers to the second sheet)
+
     return sheet1, sheet2
 
 # Main loop
