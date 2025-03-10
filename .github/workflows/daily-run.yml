@@ -27,6 +27,9 @@ jobs:
           pip install -r requirements.txt
 
       # Step 4: Configure secrets (e.g., API keys, credentials)
+      - name: Configure secrets
+        run: |
+          echo "GOOGLE_CREDENTIALS=${{ secrets.GOOGLE_CREDENTIALS }}" >> $GITHUB_ENV
 
 
       # Step 5: Run the script
