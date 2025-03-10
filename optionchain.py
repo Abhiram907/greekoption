@@ -8,6 +8,7 @@ import pyotp
 from logzero import logger
 from datetime import datetime, timedelta
 import pytz
+import os
 
 api_key = 'ka8AoHBH'
 username = 'R829267'
