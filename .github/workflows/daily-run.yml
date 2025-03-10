@@ -26,20 +26,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 4: Write Google Sheets credentials from secret
-      - name: Write Google Sheets credentials
-        run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS }}" > gen-lang-client-0821497990-b7d00535dc2e.json
-
-      # Step 5: Configure other secrets (e.g., API keys, credentials)
+      # Step 4: Configure secrets (e.g., API keys, credentials)
       - name: Configure secrets
         run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
           echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
           echo "USERNAME=${{ secrets.USERNAME }}" >> $GITHUB_ENV
           echo "PASSWORD=${{ secrets.PASSWORD }}" >> $GITHUB_ENV
           echo "TOTP_TOKEN=${{ secrets.TOTP_TOKEN }}" >> $GITHUB_ENV
 
-      # Step 6: Run the script
+      # Step 5: Run the script
       - name: Run script
         run: |
           python optionchain.py
