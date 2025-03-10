@@ -3,12 +3,8 @@ name: Run Daily Script
 on:
   schedule:
     - cron: "45 3 * * *" # Runs every day at 4:00 AM UTC (9:30 AM IST)
-  name: Run Daily Script
+  workflow_dispatch:
 
-on:
-  schedule:
-    - cron: "45 3 * * *"  # Runs every day at 9:15 AM IST (3:45 AM UTC)
-  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   run-script:
@@ -66,4 +62,4 @@ jobs:
       # Step 5: Run the script
       - name: Run script
         run: |
-          python main.py
+          python optionchain.py
