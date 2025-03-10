@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import pytz
 import os
 
-api_key = 'ka8AoHBH'
+api_key = 'BbxU1S7Z'
 username = 'R829267'
 pwd = '3132'
 api= SmartConnect(api_key)
