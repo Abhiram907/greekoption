@@ -77,7 +77,7 @@ def get_data():
 # Authenticate with Google Sheets
 def authenticate_google_sheets():
     # Path to your service account JSON key file
-    credentials_path = "/content/gen-lang-client-0821497990-b7d00535dc2e.json"
+    credentials_path = "gen-lang-client-0821497990-b7d00535dc2e.json"
     
     # Define the scope of permissions
     scope = [
