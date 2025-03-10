@@ -263,9 +263,4 @@ if __name__ == "__main__":
             time.sleep(60)
       else:
             print("Outside trading hours. Waiting until 9:15 AM IST...")
-            # Calculate the time to wait until the next trading day at 9:15 AM
-            next_start = now.replace(hour=9, minute=15, second=0, microsecond=0)
-            if now > next_start.replace(hour=15, minute=30):  # If past 3:30 PM, move to the next day
-                next_start += timedelta(days=1)
-            sleep_time = (next_start - now).total_seconds()
-            time.sleep(sleep_time)
+            sys.exit()
