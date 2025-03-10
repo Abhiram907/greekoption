@@ -6,6 +6,8 @@ from pytz import timezone  # For handling timezones
 from SmartApi import SmartConnect
 import pyotp
 from logzero import logger
+from datetime import datetime, timedelta
+import pytz
 
 api_key = 'ka8AoHBH'
 username = 'R829267'
@@ -23,6 +25,15 @@ data = api.generateSession(username, pwd, totp)
 
 if data['status'] == False:
     logger.error(data)
+
+def is_trading_hours():
+    ist = timezone('Asia/Kolkata')
+    now = datetime.now(ist)
+    start_time = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    end_time = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    return start_time <= now <= end_time
+
+
 # Initialize an empty DataFrame to store the differences
 difference_table = pd.DataFrame(columns=[
     "timestamp", 
@@ -94,144 +105,158 @@ if __name__ == "__main__":
     sheet1, sheet2 = authenticate_google_sheets()
 
     while True:
-        # Fetch the latest option chain data
-        option_chain = get_data()
+      ist = pytz.timezone('Asia/Kolkata')
+      now = datetime.now(ist)
 
-        try:
-            option_chain['strikePrice'] = pd.to_numeric(option_chain['strikePrice'], errors='coerce')
-        except Exception as e:
-            logger.error(f"Error converting strikePrice to numeric: {e}")
-            continue
+      
+      if is_trading_hours():
+            print(f"Running at {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')} IST")
 
-        # Step 1: Convert relevant columns to numeric
-        try:
-            numeric_columns = ['delta_x', 'gamma_x', 'theta_x', 'vega_x', 'delta_y', 'gamma_y', 'theta_y', 'vega_y']
-            for col in numeric_columns:
-                option_chain[col] = pd.to_numeric(option_chain[col], errors='coerce').fillna(0)  # Replace NaN with 0
-        except Exception as e:
-            logger.error(f"Error converting columns to numeric: {e}")
-            continue
+            option_chain = get_data()
 
-        # Step 2: Extract the first strike price
-        first_strike_price = option_chain['strikePrice'].iloc[0]
+            try:
+                option_chain['strikePrice'] = pd.to_numeric(option_chain['strikePrice'], errors='coerce')
+            except Exception as e:
+                logger.error(f"Error converting strikePrice to numeric: {e}")
+                continue
 
-        # Step 3: Define the range [strikePrice - 750, strikePrice + 750]
-        lower_bound = first_strike_price - 15 * 50
-        upper_bound = first_strike_price + 15 * 50
+            # Step 1: Convert relevant columns to numeric
+            try:
+                numeric_columns = ['delta_x', 'gamma_x', 'theta_x', 'vega_x', 'delta_y', 'gamma_y', 'theta_y', 'vega_y']
+                for col in numeric_columns:
+                    option_chain[col] = pd.to_numeric(option_chain[col], errors='coerce').fillna(0)  # Replace NaN with 0
+            except Exception as e:
+                logger.error(f"Error converting columns to numeric: {e}")
+                continue
 
-        # Step 4: Filter rows where strikePrice is within the range
-        filtered_option_chain = option_chain[
-            (option_chain['strikePrice'] >= lower_bound) &
-            (option_chain['strikePrice'] <= upper_bound)
-        ]
+            # Step 2: Extract the first strike price
+            first_strike_price = option_chain['strikePrice'].iloc[0]
 
-        # Step 5: Sum the relevant columns
-        current_summary = {
-            "timestamp": pd.Timestamp.now(tz=timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S"),
-            "name": "NIFTY",  # Name of the underlying asset
-            "delta_x_sum": filtered_option_chain['delta_x'].sum(),
-            "gamma_x_sum": filtered_option_chain['gamma_x'].sum(),
-            "theta_x_sum": filtered_option_chain['theta_x'].sum(),
-            "vega_x_sum": filtered_option_chain['vega_x'].sum(),
-            "delta_y_sum": filtered_option_chain['delta_y'].sum(),
-            "gamma_y_sum": filtered_option_chain['gamma_y'].sum(),
-            "theta_y_sum": filtered_option_chain['theta_y'].sum(),
-            "vega_y_sum": filtered_option_chain['vega_y'].sum()
-        }
+            # Step 3: Define the range [strikePrice - 750, strikePrice + 750]
+            lower_bound = first_strike_price - 15 * 50
+            upper_bound = first_strike_price + 15 * 50
 
-        # Step 6: Calculate differences
-        if previous_summary is None:
-            # First iteration: No previous summary, so differences are 0
-            ce_differences = {
-                "delta_diff_CE": 0,
-                "gamma_diff_CE": 0,
-                "theta_diff_CE": 0,
-                "vega_diff_CE": 0
-            }
-            pe_differences = {
-                "delta_diff_PE": 0,
-                "gamma_diff_PE": 0,
-                "theta_diff_PE": 0,
-                "vega_diff_PE": 0
-            }
-        else:
-            # Ensure all values are numeric before calculating differences
-            ce_differences = {
-                "delta_diff_CE": float(current_summary["delta_x_sum"]) - float(previous_summary["delta_x_sum"]),
-                "gamma_diff_CE": float(current_summary["gamma_x_sum"]) - float(previous_summary["gamma_x_sum"]),
-                "theta_diff_CE": float(current_summary["theta_x_sum"]) - float(previous_summary["theta_x_sum"]),
-                "vega_diff_CE": float(current_summary["vega_x_sum"]) - float(previous_summary["vega_x_sum"])
-            }
-            pe_differences = {
-                "delta_diff_PE": float(current_summary["delta_y_sum"]) - float(previous_summary["delta_y_sum"]),
-                "gamma_diff_PE": float(current_summary["gamma_y_sum"]) - float(previous_summary["gamma_y_sum"]),
-                "theta_diff_PE": float(current_summary["theta_y_sum"]) - float(previous_summary["theta_y_sum"]),
-                "vega_diff_PE": float(current_summary["vega_y_sum"]) - float(previous_summary["vega_y_sum"])
+            # Step 4: Filter rows where strikePrice is within the range
+            filtered_option_chain = option_chain[
+                (option_chain['strikePrice'] >= lower_bound) &
+                (option_chain['strikePrice'] <= upper_bound)
+            ]
+
+            # Step 5: Sum the relevant columns
+            current_summary = {
+                "timestamp": pd.Timestamp.now(tz=timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S"),
+                "name": "NIFTY",  # Name of the underlying asset
+                "delta_x_sum": filtered_option_chain['delta_x'].sum(),
+                "gamma_x_sum": filtered_option_chain['gamma_x'].sum(),
+                "theta_x_sum": filtered_option_chain['theta_x'].sum(),
+                "vega_x_sum": filtered_option_chain['vega_x'].sum(),
+                "delta_y_sum": filtered_option_chain['delta_y'].sum(),
+                "gamma_y_sum": filtered_option_chain['gamma_y'].sum(),
+                "theta_y_sum": filtered_option_chain['theta_y'].sum(),
+                "vega_y_sum": filtered_option_chain['vega_y'].sum()
             }
 
-        # Step 7: Fetch the Last Traded Price (LTP)
-        try:
-            ltp_response = api.ltpData('NSE', 'NIFTY', '26000')  # Fetch LTP for NIFTY
-            if ltp_response['status']:
-                ltp = ltp_response['data']['ltp']  # Extract LTP
+            # Step 6: Calculate differences
+            if previous_summary is None:
+                # First iteration: No previous summary, so differences are 0
+                ce_differences = {
+                    "delta_diff_CE": 0,
+                    "gamma_diff_CE": 0,
+                    "theta_diff_CE": 0,
+                    "vega_diff_CE": 0
+                }
+                pe_differences = {
+                    "delta_diff_PE": 0,
+                    "gamma_diff_PE": 0,
+                    "theta_diff_PE": 0,
+                    "vega_diff_PE": 0
+                }
             else:
-                ltp = None  # Handle cases where LTP data is unavailable
-        except Exception as e:
-            logger.error(f"Error fetching LTP: {e}")
-            ltp = None
+                # Ensure all values are numeric before calculating differences
+                ce_differences = {
+                    "delta_diff_CE": float(current_summary["delta_x_sum"]) - float(previous_summary["delta_x_sum"]),
+                    "gamma_diff_CE": float(current_summary["gamma_x_sum"]) - float(previous_summary["gamma_x_sum"]),
+                    "theta_diff_CE": float(current_summary["theta_x_sum"]) - float(previous_summary["theta_x_sum"]),
+                    "vega_diff_CE": float(current_summary["vega_x_sum"]) - float(previous_summary["vega_x_sum"])
+                }
+                pe_differences = {
+                    "delta_diff_PE": float(current_summary["delta_y_sum"]) - float(previous_summary["delta_y_sum"]),
+                    "gamma_diff_PE": float(current_summary["gamma_y_sum"]) - float(previous_summary["gamma_y_sum"]),
+                    "theta_diff_PE": float(current_summary["theta_y_sum"]) - float(previous_summary["theta_y_sum"]),
+                    "vega_diff_PE": float(current_summary["vega_y_sum"]) - float(previous_summary["vega_y_sum"])
+                }
 
-        # Step 8: Update the difference_table
-        combined_differences = {
-            "timestamp": current_summary["timestamp"],
-            "name": "NIFTY",
-            "price": ltp,  # Add LTP to the row
-            **ce_differences,
-            **pe_differences
-        }
+            # Step 7: Fetch the Last Traded Price (LTP)
+            try:
+                ltp_response = api.ltpData('NSE', 'NIFTY', '26000')  # Fetch LTP for NIFTY
+                if ltp_response['status']:
+                    ltp = ltp_response['data']['ltp']  # Extract LTP
+                else:
+                    ltp = None  # Handle cases where LTP data is unavailable
+            except Exception as e:
+                logger.error(f"Error fetching LTP: {e}")
+                ltp = None
 
-        if difference_table.empty:
-            # If the table is empty, add the first row
-            difference_table.loc[0] = combined_differences
-        else:
-            # If the table already has rows, append a new row
-            difference_table.loc[len(difference_table)] = combined_differences
+            # Step 8: Update the difference_table
+            combined_differences = {
+                "timestamp": current_summary["timestamp"],
+                "name": "NIFTY",
+                "price": ltp,  # Add LTP to the row
+                **ce_differences,
+                **pe_differences
+            }
 
-        # Print the updated difference table
-        print("\nDifference Table:")
-        print(difference_table)
+            if difference_table.empty:
+                # If the table is empty, add the first row
+                difference_table.loc[0] = combined_differences
+            else:
+                # If the table already has rows, append a new row
+                difference_table.loc[len(difference_table)] = combined_differences
 
-        # Step 9: Write the difference_table to Sheet1
-        try:
-            # Convert the DataFrame to a list of lists
-            records = difference_table.values.tolist()
-            
-            # Add column headers if the sheet is empty
-            if not sheet1.get_all_values():
-                headers = difference_table.columns.tolist()
-                sheet1.append_row(headers)  # Write the headers
-            
-            # Append the latest row only
-            sheet1.append_row(records[-1])  # Append the last row (latest update)
-        except Exception as e:
-            logger.error(f"Error writing to Sheet1: {e}")
+            # Print the updated difference table
+            print("\nDifference Table:")
+            print(difference_table)
 
-        # Step 10: Write the current_summary to Sheet2
-        try:
-            # Convert the current_summary dictionary to a list
-            summary_record = list(current_summary.values())
-            
-            # Add column headers if the sheet is empty
-            if not sheet2.get_all_values():
-                headers = list(current_summary.keys())
-                sheet2.append_row(headers)  # Write the headers
-            
-            # Append the latest summary record
-            sheet2.append_row(summary_record)
-        except Exception as e:
-            logger.error(f"Error writing to Sheet2: {e}")
+            # Step 9: Write the difference_table to Sheet1
+            try:
+                # Convert the DataFrame to a list of lists
+                records = difference_table.values.tolist()
 
-        # Step 11: Update previous_summary for the next iteration
-        previous_summary = current_summary
+                # Add column headers if the sheet is empty
+                if not sheet1.get_all_values():
+                    headers = difference_table.columns.tolist()
+                    sheet1.append_row(headers)  # Write the headers
 
-        # Wait for 60 seconds before the next iteration
-        time.sleep(60)
+                # Append the latest row only
+                sheet1.append_row(records[-1])  # Append the last row (latest update)
+            except Exception as e:
+                logger.error(f"Error writing to Sheet1: {e}")
+
+            # Step 10: Write the current_summary to Sheet2
+            try:
+                # Convert the current_summary dictionary to a list
+                summary_record = list(current_summary.values())
+
+                # Add column headers if the sheet is empty
+                if not sheet2.get_all_values():
+                    headers = list(current_summary.keys())
+                    sheet2.append_row(headers)  # Write the headers
+
+                # Append the latest summary record
+                sheet2.append_row(summary_record)
+            except Exception as e:
+                logger.error(f"Error writing to Sheet2: {e}")
+
+            # Step 11: Update previous_summary for the next iteration
+            previous_summary = current_summary
+
+            # Wait for 60 seconds before the next iteration
+            time.sleep(60)
+      else:
+            print("Outside trading hours. Waiting until 9:15 AM IST...")
+            # Calculate the time to wait until the next trading day at 9:15 AM
+            next_start = now.replace(hour=9, minute=15, second=0, microsecond=0)
+            if now > next_start.replace(hour=15, minute=30):  # If past 3:30 PM, move to the next day
+                next_start += timedelta(days=1)
+            sleep_time = (next_start - now).total_seconds()
+            time.sleep(sleep_time)
