@@ -27,12 +27,9 @@ jobs:
           pip install -r requirements.txt
 
       # Step 4: Configure secrets (e.g., API keys, credentials)
+
+
+      # Step 5: Run the script
       - name: Run script
-        env:
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-          API_KEY: ${{ secrets.API_KEY }}
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
-          TOTP_TOKEN: ${{ secrets.TOTP_TOKEN }}
         run: |
           python optionchain.py
