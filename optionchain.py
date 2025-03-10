@@ -82,7 +82,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 def authenticate_google_sheets():
     # Path to your service account JSON key file
-    credentials_path = "/content/gen-lang-client-0864245587-f83783301092.json"
+    credentials_path = "gen-lang-client-0864245587-f83783301092.json"
 
     # Define the scope of permissions
     scope = [
