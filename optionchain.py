@@ -314,7 +314,7 @@ if __name__ == "__main__":
             }
 
             # Wait for 60 seconds before the next iteration
-            time.sleep(60)
+            time.sleep(30)
       else:
         print("Outside trading hours.")
         sys.exit()
