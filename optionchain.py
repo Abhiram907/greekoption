@@ -38,18 +38,22 @@ def is_trading_hours():
 
 # Initialize an empty DataFrame to store the differences
 difference_table = pd.DataFrame(columns=[
-    "timestamp", 
-    "name", 
-    "price",  # New column for Last Traded Price (LTP)
-    "delta_diff_CE", "gamma_diff_CE", "theta_diff_CE", "vega_diff_CE",
-    "delta_diff_PE", "gamma_diff_PE", "theta_diff_PE", "vega_diff_PE"
+    "timestamp",
+    "name",
+    "price",  # Price for CE
+    "delta_diff_ce", "gamma_diff_ce", "theta_diff_ce", "vega_diff_ce",
+    "delta_diff_pe", "gamma_diff_pe", "theta_diff_pe", "vega_diff_pe"
 ])
 
 # Variable to store the previous summary
 previous_summary = None
 
 # Function to fetch and process data
-def get_data():
+import pandas as pd
+import time
+
+# Function to fetch and process data
+def get_data_x():
     params = {
         "name": "NIFTY",
         "expirydate": "13MAR2025"
@@ -61,24 +65,40 @@ def get_data():
 
         # Separate CE and PE options
         greeks_CE = greeks[greeks['optionType'] == 'CE']
-        greeks_PE = greeks[greeks['optionType'] == 'PE']
 
-        # Merge CE and PE data on strikePrice
-        greeks_merged = pd.merge(greeks_CE, greeks_PE, on='strikePrice')
+        # # Add timestamp
+        # greeks_CE.loc[:, 'timestamp'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Add timestamp
-        greeks_merged['timestamp'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        return greeks_merged
+        return greeks_CE
 
     except Exception as e:
         logger.error(f"Error fetching or processing data: {e}")
         raise e
 
+def get_data_y():
+    params = {
+        "name": "NIFTY",
+        "expirydate": "13MAR2025"
+    }
+    try:
+        # Fetch option Greeks data
+        time.sleep(1)
+        optionGreek = api.optionGreek(params)
+        greeks = pd.DataFrame(optionGreek['data'])
+        greeks_PE = greeks[greeks['optionType'] == 'PE']
+
+        # Add timestamp
+        # greeks_PE.loc[:, 'timestamp'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        return greeks_PE
+
+    except Exception as e:
+        logger.error(f"Error fetching or processing data: {e}")
+        raise e
 
 # Authenticate with Google Sheets
 import json
-import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -118,82 +138,75 @@ if __name__ == "__main__":
       ist = pytz.timezone('Asia/Kolkata')
       now = datetime.now(ist)
 
-      
+
       if is_trading_hours():
             print(f"Running at {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')} IST")
+            # Fetch data for CE and PE
+            option_chainx = get_data_x()  # CE data
+            option_chainy = get_data_y()  # PE data
+            
+            # Process numeric columns for CE and PE
+            numeric_columns = ['strikePrice', 'delta', 'gamma', 'theta', 'vega']
+            for col in numeric_columns:
+                option_chainx[col] = pd.to_numeric(option_chainx[col], errors='coerce').fillna(0)
+                option_chainy[col] = pd.to_numeric(option_chainy[col], errors='coerce').fillna(0)
 
-            option_chain = get_data()
-
-            try:
-                option_chain['strikePrice'] = pd.to_numeric(option_chain['strikePrice'], errors='coerce')
-            except Exception as e:
-                logger.error(f"Error converting strikePrice to numeric: {e}")
-                continue
-
-            # Step 1: Convert relevant columns to numeric
-            try:
-                numeric_columns = ['delta_x', 'gamma_x', 'theta_x', 'vega_x', 'delta_y', 'gamma_y', 'theta_y', 'vega_y']
-                for col in numeric_columns:
-                    option_chain[col] = pd.to_numeric(option_chain[col], errors='coerce').fillna(0)  # Replace NaN with 0
-            except Exception as e:
-                logger.error(f"Error converting columns to numeric: {e}")
-                continue
-
-            # Step 2: Extract the first strike price
-            first_strike_price = option_chain['strikePrice'].iloc[0]
-
-            # Step 3: Define the range [strikePrice - 750, strikePrice + 750]
-            lower_bound = first_strike_price - 15 * 50
-            upper_bound = first_strike_price + 15 * 50
-
-            # Step 4: Filter rows where strikePrice is within the range
-            filtered_option_chain = option_chain[
-                (option_chain['strikePrice'] >= lower_bound) &
-                (option_chain['strikePrice'] <= upper_bound)
+            # Filter CE and PE based on delta conditions
+            calls_filtered = option_chainx[
+                (option_chainx['delta'] >= 0.05) & 
+                (option_chainx['delta'] <= 0.6)
+            ]
+            puts_filtered = option_chainy[
+                (option_chainy['delta'] >= -0.6) & 
+                (option_chainy['delta'] <= -0.05)
             ]
 
-            # Step 5: Sum the relevant columns
-            current_summary = {
+           
+                   # Summarize CE and PE data
+            current_summary_ce = {
                 "timestamp": pd.Timestamp.now(tz=timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S"),
-                "name": "NIFTY",  # Name of the underlying asset
-                "delta_x_sum": filtered_option_chain['delta_x'].sum(),
-                "gamma_x_sum": filtered_option_chain['gamma_x'].sum(),
-                "theta_x_sum": filtered_option_chain['theta_x'].sum(),
-                "vega_x_sum": filtered_option_chain['vega_x'].sum(),
-                "delta_y_sum": filtered_option_chain['delta_y'].sum(),
-                "gamma_y_sum": filtered_option_chain['gamma_y'].sum(),
-                "theta_y_sum": filtered_option_chain['theta_y'].sum(),
-                "vega_y_sum": filtered_option_chain['vega_y'].sum()
+                "name": "NIFTY",
+                "price": None,  # Placeholder for LTP
+                "delta_x_sum": calls_filtered['delta'].sum(),
+                "gamma_x_sum": calls_filtered['gamma'].sum(),
+                "theta_x_sum": calls_filtered['theta'].sum(),
+                "vega_x_sum": calls_filtered['vega'].sum()
+            }
+            current_summary_pe = {
+                "timestamp": pd.Timestamp.now(tz=timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S"),
+                "name": "NIFTY",
+                "delta_y_sum": puts_filtered['delta'].sum(),
+                "gamma_y_sum": puts_filtered['gamma'].sum(),
+                "theta_y_sum": puts_filtered['theta'].sum(),
+                "vega_y_sum": puts_filtered['vega'].sum()
             }
 
-            # Step 6: Calculate differences
+            # Calculate differences for CE and PE
             if previous_summary is None:
-                # First iteration: No previous summary, so differences are 0
                 ce_differences = {
-                    "delta_diff_CE": 0,
-                    "gamma_diff_CE": 0,
-                    "theta_diff_CE": 0,
-                    "vega_diff_CE": 0
+                    "delta_diff_ce": 0,
+                    "gamma_diff_ce": 0,
+                    "theta_diff_ce": 0,
+                    "vega_diff_ce": 0
                 }
                 pe_differences = {
-                    "delta_diff_PE": 0,
-                    "gamma_diff_PE": 0,
-                    "theta_diff_PE": 0,
-                    "vega_diff_PE": 0
+                    "delta_diff_pe": 0,
+                    "gamma_diff_pe": 0,
+                    "theta_diff_pe": 0,
+                    "vega_diff_pe": 0
                 }
             else:
-                # Ensure all values are numeric before calculating differences
                 ce_differences = {
-                    "delta_diff_CE": float(current_summary["delta_x_sum"]) - float(previous_summary["delta_x_sum"]),
-                    "gamma_diff_CE": float(current_summary["gamma_x_sum"]) - float(previous_summary["gamma_x_sum"]),
-                    "theta_diff_CE": float(current_summary["theta_x_sum"]) - float(previous_summary["theta_x_sum"]),
-                    "vega_diff_CE": float(current_summary["vega_x_sum"]) - float(previous_summary["vega_x_sum"])
+                    "delta_diff_ce": float(current_summary_ce["delta_x_sum"]) - float(previous_summary["delta_x_sum"]),
+                    "gamma_diff_ce": float(current_summary_ce["gamma_x_sum"]) - float(previous_summary["gamma_x_sum"]),
+                    "theta_diff_ce": float(current_summary_ce["theta_x_sum"]) - float(previous_summary["theta_x_sum"]),
+                    "vega_diff_ce": float(current_summary_ce["vega_x_sum"]) - float(previous_summary["vega_x_sum"])
                 }
                 pe_differences = {
-                    "delta_diff_PE": float(current_summary["delta_y_sum"]) - float(previous_summary["delta_y_sum"]),
-                    "gamma_diff_PE": float(current_summary["gamma_y_sum"]) - float(previous_summary["gamma_y_sum"]),
-                    "theta_diff_PE": float(current_summary["theta_y_sum"]) - float(previous_summary["theta_y_sum"]),
-                    "vega_diff_PE": float(current_summary["vega_y_sum"]) - float(previous_summary["vega_y_sum"])
+                    "delta_diff_pe": float(current_summary_pe["delta_y_sum"]) - float(previous_summary["delta_y_sum"]),
+                    "gamma_diff_pe": float(current_summary_pe["gamma_y_sum"]) - float(previous_summary["gamma_y_sum"]),
+                    "theta_diff_pe": float(current_summary_pe["theta_y_sum"]) - float(previous_summary["theta_y_sum"]),
+                    "vega_diff_pe": float(current_summary_pe["vega_y_sum"]) - float(previous_summary["vega_y_sum"])
                 }
 
             # Step 7: Fetch the Last Traded Price (LTP)
@@ -207,61 +220,101 @@ if __name__ == "__main__":
                 logger.error(f"Error fetching LTP: {e}")
                 ltp = None
 
-            # Step 8: Update the difference_table
+            # Combine all data into a single row
             combined_differences = {
-                "timestamp": current_summary["timestamp"],
+                "timestamp": current_summary_ce["timestamp"],
                 "name": "NIFTY",
-                "price": ltp,  # Add LTP to the row
-                **ce_differences,
-                **pe_differences
+                "price": ltp,  # LTP for CE
+                "delta_diff_ce": ce_differences["delta_diff_ce"],
+                "gamma_diff_ce": ce_differences["gamma_diff_ce"],
+                "theta_diff_ce": ce_differences["theta_diff_ce"],
+                "vega_diff_ce": ce_differences["vega_diff_ce"],
+                "delta_diff_pe": pe_differences["delta_diff_pe"],
+                "gamma_diff_pe": pe_differences["gamma_diff_pe"],
+                "theta_diff_pe": pe_differences["theta_diff_pe"],
+                "vega_diff_pe": pe_differences["vega_diff_pe"]
             }
 
+            # Append the new row to the difference_table
             if difference_table.empty:
-                # If the table is empty, add the first row
                 difference_table.loc[0] = combined_differences
             else:
-                # If the table already has rows, append a new row
                 difference_table.loc[len(difference_table)] = combined_differences
 
             # Print the updated difference table
             print("\nDifference Table:")
             print(difference_table)
 
-            # Step 9: Write the difference_table to Sheet1
+            # Write the difference_table to Sheet1
             try:
                 # Convert the DataFrame to a list of lists
                 records = difference_table.values.tolist()
-
                 # Add column headers if the sheet is empty
                 if not sheet1.get_all_values():
                     headers = difference_table.columns.tolist()
                     sheet1.append_row(headers)  # Write the headers
-
                 # Append the latest row only
                 sheet1.append_row(records[-1])  # Append the last row (latest update)
             except Exception as e:
                 logger.error(f"Error writing to Sheet1: {e}")
 
+
+
             # Step 10: Write the current_summary to Sheet2
+            # Inside the main loop, after calculating combined_differences:
+
+            # Step 1: Create merged summary for Sheet2
+            merged_summary = {
+                "timestamp": current_summary_ce["timestamp"],
+                "name": "NIFTY",
+                "price": ltp,
+                # CE metrics
+                "delta_x_sum": current_summary_ce["delta_x_sum"],
+                "gamma_x_sum": current_summary_ce["gamma_x_sum"],
+                "theta_x_sum": current_summary_ce["theta_x_sum"],
+                "vega_x_sum": current_summary_ce["vega_x_sum"],
+                # PE metrics
+                "delta_y_sum": current_summary_pe["delta_y_sum"],
+                "gamma_y_sum": current_summary_pe["gamma_y_sum"],
+                "theta_y_sum": current_summary_pe["theta_y_sum"],
+                "vega_y_sum": current_summary_pe["vega_y_sum"]
+            }
+
+            # Step 2: Write merged_summary to Sheet2
             try:
-                # Convert the current_summary dictionary to a list
-                summary_record = list(current_summary.values())
-
-                # Add column headers if the sheet is empty
+                # Convert to list in column order
+                summary_record = [
+                    merged_summary["timestamp"],
+                    merged_summary["name"],
+                    merged_summary["price"],
+                    merged_summary["delta_x_sum"],
+                    merged_summary["gamma_x_sum"],
+                    merged_summary["theta_x_sum"],
+                    merged_summary["vega_x_sum"],
+                    merged_summary["delta_y_sum"],
+                    merged_summary["gamma_y_sum"],
+                    merged_summary["theta_y_sum"],
+                    merged_summary["vega_y_sum"]
+                ]
+                
+                # Add headers if sheet is empty
                 if not sheet2.get_all_values():
-                    headers = list(current_summary.keys())
-                    sheet2.append_row(headers)  # Write the headers
-
-                # Append the latest summary record
+                    headers = list(merged_summary.keys())
+                    sheet2.append_row(headers)
+                
+                # Append the latest summary
                 sheet2.append_row(summary_record)
             except Exception as e:
                 logger.error(f"Error writing to Sheet2: {e}")
 
-            # Step 11: Update previous_summary for the next iteration
-            previous_summary = current_summary
+            # Step 3: Update previous_summary correctly
+            previous_summary = {
+                **current_summary_ce,
+                **current_summary_pe
+            }
 
             # Wait for 60 seconds before the next iteration
             time.sleep(60)
       else:
-            print("Outside trading hours. Waiting until 9:15 AM IST...")
-            sys.exit()
+        print("Outside trading hours.")
+        sys.exit()
