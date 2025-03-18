@@ -10,11 +10,14 @@ from datetime import datetime, timedelta
 import pytz
 import os
 import sys
+from nsepython import nse_optionchain_scrapper
 
+# Initialize API and session
 api_key = 'BbxU1S7Z'
 username = 'R829267'
 pwd = '3132'
-api= SmartConnect(api_key)
+api = SmartConnect(api_key)
+
 try:
     token = "VZIVAZKQIJLUYVDKQM2QEQI2V4"
     totp = pyotp.TOTP(token).now()
@@ -24,17 +27,16 @@ except Exception as e:
 
 correlation_id = "abcde"
 data = api.generateSession(username, pwd, totp)
-
 if data['status'] == False:
     logger.error(data)
 
+# Function to check if within trading hours
 def is_trading_hours():
     ist = timezone('Asia/Kolkata')
     now = datetime.now(ist)
     start_time = now.replace(hour=9, minute=15, second=0, microsecond=0)
     end_time = now.replace(hour=15, minute=30, second=0, microsecond=0)
     return start_time <= now <= end_time
-
 
 # Initialize an empty DataFrame to store the differences
 difference_table = pd.DataFrame(columns=[
@@ -48,60 +50,57 @@ difference_table = pd.DataFrame(columns=[
 # Variable to store the previous summary
 previous_summary = None
 
-# Function to fetch and process data
-import pandas as pd
-import time
+# Function to fetch available expiries using nsepython
+def get_available_expiries(instrument_name):
+    try:
+        # Fetch the list of expiries for the given instrument
+        expiry_list = nse_optionchain_scrapper(instrument_name)["records"]["expiryDates"]
+        
+        # Sort expiry dates chronologically
+        expiry_list = sorted(expiry_list, key=lambda x: datetime.strptime(x, "%d-%b-%Y"))
+        return expiry_list
+    except Exception as e:
+        print(f"Error fetching expiry dates: {e}")
+        return []
+
+# Function to get the next valid expiry
+def get_next_expiry(available_expiries, current_date):
+    for expiry in available_expiries:
+        # Parse expiry date and make it timezone-aware
+        expiry_date = datetime.strptime(expiry, "%d-%b-%Y")
+        expiry_date = pytz.timezone('Asia/Kolkata').localize(expiry_date)  # Make timezone-aware
+        
+        # Compare expiry date with current date
+        if expiry_date > current_date:
+            return expiry  # Return the first expiry in the future
+    return None  # No valid expiry found
 
 # Function to fetch and process data
-def get_data_x():
-    params = {
-        "name": "NIFTY",
-        "expirydate": "13MAR2025"
-    }
+def get_data_x(params):
     try:
         # Fetch option Greeks data
         optionGreek = api.optionGreek(params)
         greeks = pd.DataFrame(optionGreek['data'])
-
         # Separate CE and PE options
         greeks_CE = greeks[greeks['optionType'] == 'CE']
-
-        # # Add timestamp
-        # greeks_CE.loc[:, 'timestamp'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
         return greeks_CE
-
     except Exception as e:
         logger.error(f"Error fetching or processing data: {e}")
         raise e
 
-def get_data_y():
-    params = {
-        "name": "NIFTY",
-        "expirydate": "13MAR2025"
-    }
+def get_data_y(params):
     try:
         # Fetch option Greeks data
         time.sleep(1)
         optionGreek = api.optionGreek(params)
         greeks = pd.DataFrame(optionGreek['data'])
         greeks_PE = greeks[greeks['optionType'] == 'PE']
-
-        # Add timestamp
-        # greeks_PE.loc[:, 'timestamp'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-
         return greeks_PE
-
     except Exception as e:
         logger.error(f"Error fetching or processing data: {e}")
         raise e
 
 # Authenticate with Google Sheets
-import json
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-
 def authenticate_google_sheets():
     # Load credentials from the GitHub Secret
     credentials_json = os.getenv("GOOGLE_CREDENTIALS")
@@ -133,24 +132,48 @@ def authenticate_google_sheets():
 if __name__ == "__main__":
     # Authenticate and get both sheets
     sheet1, sheet2 = authenticate_google_sheets()
-
+    
+    # Fetch available expiries
+    ist = pytz.timezone('Asia/Kolkata')
+    current_date = datetime.now(ist)
+    available_expiries = get_available_expiries("NIFTY")
+    if not available_expiries:
+        logger.error("No available expiries found. Exiting.")
+        sys.exit()
+    
+    # Set initial expiry
+    params = {
+        "name": "NIFTY",
+        "expirydate": get_next_expiry(available_expiries, current_date)
+    }
+    
     while True:
-      ist = pytz.timezone('Asia/Kolkata')
-      now = datetime.now(ist)
-
-
-      if is_trading_hours():
+        if is_trading_hours():
             print(f"Running at {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')} IST")
+            
+            # Check if current expiry is still valid
+            expiry_date = datetime.strptime(params["expirydate"], "%d-%b-%Y")
+            expiry_date = pytz.timezone('Asia/Kolkata').localize(expiry_date)
+            if expiry_date < current_date:
+                logger.info(f"Expiry {params['expirydate']} has passed. Moving to the next expiry.")
+                next_expiry = get_next_expiry(available_expiries, current_date)
+                if next_expiry:
+                    params["expirydate"] = next_expiry
+                    logger.info(f"New expiry set to {params['expirydate']}")
+                else:
+                    logger.error("No more valid expiries available. Exiting.")
+                    sys.exit()
+            
             # Fetch data for CE and PE
-            option_chainx = get_data_x()  # CE data
-            option_chainy = get_data_y()  # PE data
+            option_chainx = get_data_x(params)  # CE data
+            option_chainy = get_data_y(params)  # PE data
             
             # Process numeric columns for CE and PE
             numeric_columns = ['strikePrice', 'delta', 'gamma', 'theta', 'vega']
             for col in numeric_columns:
                 option_chainx[col] = pd.to_numeric(option_chainx[col], errors='coerce').fillna(0)
                 option_chainy[col] = pd.to_numeric(option_chainy[col], errors='coerce').fillna(0)
-
+            
             # Filter CE and PE based on delta conditions
             calls_filtered = option_chainx[
                 (option_chainx['delta'] >= 0.05) & 
@@ -160,9 +183,8 @@ if __name__ == "__main__":
                 (option_chainy['delta'] >= -0.6) & 
                 (option_chainy['delta'] <= -0.05)
             ]
-
-           
-                   # Summarize CE and PE data
+            
+            # Summarize CE and PE data
             current_summary_ce = {
                 "timestamp": pd.Timestamp.now(tz=timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S"),
                 "name": "NIFTY",
@@ -180,7 +202,7 @@ if __name__ == "__main__":
                 "theta_y_sum": puts_filtered['theta'].sum(),
                 "vega_y_sum": puts_filtered['vega'].sum()
             }
-
+            
             # Calculate differences for CE and PE
             if previous_summary is None:
                 ce_differences = {
@@ -208,7 +230,7 @@ if __name__ == "__main__":
                     "theta_diff_pe": float(current_summary_pe["theta_y_sum"]) - float(previous_summary["theta_y_sum"]),
                     "vega_diff_pe": float(current_summary_pe["vega_y_sum"]) - float(previous_summary["vega_y_sum"])
                 }
-
+            
             # Step 7: Fetch the Last Traded Price (LTP)
             try:
                 ltp_response = api.ltpData('NSE', 'NIFTY', '26000')  # Fetch LTP for NIFTY
@@ -219,7 +241,7 @@ if __name__ == "__main__":
             except Exception as e:
                 logger.error(f"Error fetching LTP: {e}")
                 ltp = None
-
+            
             # Combine all data into a single row
             combined_differences = {
                 "timestamp": current_summary_ce["timestamp"],
@@ -234,17 +256,17 @@ if __name__ == "__main__":
                 "theta_diff_pe": pe_differences["theta_diff_pe"],
                 "vega_diff_pe": pe_differences["vega_diff_pe"]
             }
-
+            
             # Append the new row to the difference_table
             if difference_table.empty:
                 difference_table.loc[0] = combined_differences
             else:
                 difference_table.loc[len(difference_table)] = combined_differences
-
+            
             # Print the updated difference table
             print("\nDifference Table:")
             print(difference_table)
-
+            
             # Write the difference_table to Sheet1
             try:
                 # Convert the DataFrame to a list of lists
@@ -257,13 +279,8 @@ if __name__ == "__main__":
                 sheet1.append_row(records[-1])  # Append the last row (latest update)
             except Exception as e:
                 logger.error(f"Error writing to Sheet1: {e}")
-
-
-
+            
             # Step 10: Write the current_summary to Sheet2
-            # Inside the main loop, after calculating combined_differences:
-
-            # Step 1: Create merged summary for Sheet2
             merged_summary = {
                 "timestamp": current_summary_ce["timestamp"],
                 "name": "NIFTY",
@@ -279,7 +296,7 @@ if __name__ == "__main__":
                 "theta_y_sum": current_summary_pe["theta_y_sum"],
                 "vega_y_sum": current_summary_pe["vega_y_sum"]
             }
-
+            
             # Step 2: Write merged_summary to Sheet2
             try:
                 # Convert to list in column order
@@ -296,25 +313,23 @@ if __name__ == "__main__":
                     merged_summary["theta_y_sum"],
                     merged_summary["vega_y_sum"]
                 ]
-                
                 # Add headers if sheet is empty
                 if not sheet2.get_all_values():
                     headers = list(merged_summary.keys())
                     sheet2.append_row(headers)
-                
                 # Append the latest summary
                 sheet2.append_row(summary_record)
             except Exception as e:
                 logger.error(f"Error writing to Sheet2: {e}")
-
+            
             # Step 3: Update previous_summary correctly
             previous_summary = {
                 **current_summary_ce,
                 **current_summary_pe
             }
-
-            # Wait for 60 seconds before the next iteration
+            
+            # Wait for 30 seconds before the next iteration
             time.sleep(30)
-      else:
-        print("Outside trading hours.")
-        sys.exit()
+        else:
+            print("Outside trading hours.")
+            sys.exit()
