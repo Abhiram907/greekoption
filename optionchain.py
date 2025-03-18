@@ -73,7 +73,8 @@ def get_next_expiry(available_expiries, current_date):
         
         # Compare expiry date with current date
         if expiry_date > current_date:
-            return expiry  # Return the first expiry in the future
+            # Return expiry in "DDMMMYYYY" format
+            return expiry_date.strftime("%d%b%Y").upper()  # Convert to uppercase for consistency
     return None  # No valid expiry found
 
 # Function to fetch and process data
@@ -153,7 +154,7 @@ if __name__ == "__main__":
             print(f"Running at {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')} IST")
             
             # Check if current expiry is still valid
-            expiry_date = datetime.strptime(params["expirydate"], "%d-%b-%Y")
+            expiry_date = datetime.strptime(params["expirydate"], "%d%b%Y")
             expiry_date = pytz.timezone('Asia/Kolkata').localize(expiry_date)
             if expiry_date < current_date:
                 logger.info(f"Expiry {params['expirydate']} has passed. Moving to the next expiry.")
