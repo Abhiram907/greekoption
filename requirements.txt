@@ -31,3 +31,4 @@ zope.interface==6.0
 pandas
 gspread
 oauth2client
+nsepython
